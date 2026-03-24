@@ -4,12 +4,27 @@ from typing import Any, Optional
 
 from mcporacle.config import Settings
 from mcporacle.errors import (
+    DictItemNotFoundError,
     OracleAccessError,
     OracleConnectionError,
     OracleDependencyError,
     TableNotFoundError,
 )
-from mcporacle.models import TableColumnInfo, TableInfo
+from mcporacle.models import DictItemInfo, TableColumnInfo, TableInfo
+
+
+SQL_DICT_ITEM = """
+SELECT isn, parentisn, shortname, fullname, constname
+  FROM ais.dicti
+ WHERE isn = :p_isn
+""".strip()
+
+
+SQL_DICT_ITEM_BY_CONSTNAME = """
+SELECT isn, parentisn, shortname, fullname, constname
+  FROM ais.dicti
+ WHERE constname = UPPER(:p_constname)
+""".strip()
 
 
 PLSQL_TABLE_INFO_BLOCK = """
@@ -60,7 +75,7 @@ class OracleMetadataRepository:
                 password=settings.oracle_password,
                 dsn=settings.oracle_dsn,
                 min=1,
-                max=1,
+                max=3,
                 increment=1,
             )
         except oracledb.DatabaseError as exc:
@@ -122,6 +137,52 @@ class OracleMetadataRepository:
         finally:
             _close_quietly(table_cursor)
             _close_quietly(column_cursor)
+
+    def fetch_dict_item(self, isn: int) -> DictItemInfo:
+        oracledb = _import_oracledb()
+        try:
+            with self._pool.acquire() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(SQL_DICT_ITEM, p_isn=isn)
+                    row = cursor.fetchone()
+                    if not row:
+                        raise DictItemNotFoundError(
+                            "Dictionary item with ISN={isn} was not found.".format(isn=isn)
+                        )
+                    return DictItemInfo(
+                        isn=row[0],
+                        parentisn=row[1],
+                        shortname=row[2],
+                        fullname=row[3],
+                        constname=row[4],
+                    )
+        except DictItemNotFoundError:
+            raise
+        except oracledb.DatabaseError as exc:
+            raise _map_database_error(exc) from exc
+
+    def fetch_dict_item_by_constname(self, constname: str) -> DictItemInfo:
+        oracledb = _import_oracledb()
+        try:
+            with self._pool.acquire() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(SQL_DICT_ITEM_BY_CONSTNAME, p_constname=constname)
+                    row = cursor.fetchone()
+                    if not row:
+                        raise DictItemNotFoundError(
+                            "Dictionary item with constname='{c}' was not found.".format(c=constname)
+                        )
+                    return DictItemInfo(
+                        isn=row[0],
+                        parentisn=row[1],
+                        shortname=row[2],
+                        fullname=row[3],
+                        constname=row[4],
+                    )
+        except DictItemNotFoundError:
+            raise
+        except oracledb.DatabaseError as exc:
+            raise _map_database_error(exc) from exc
 
 
 def _import_oracledb() -> Any:

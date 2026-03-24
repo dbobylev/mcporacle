@@ -1,4 +1,4 @@
-"""Response models for table metadata."""
+"""Response models for table metadata and dictionary items."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -47,5 +47,28 @@ class TableInfo:
                 "table_name": self.table_name,
                 "comment": self.table_comment,
                 "columns": [column.to_dict() for column in self.columns],
+            },
+        }
+
+
+@dataclass(frozen=True)
+class DictItemInfo:
+    """Dictionary record from ais.dicti returned to MCP clients."""
+
+    isn: int
+    parentisn: Optional[int]
+    shortname: Optional[str]
+    fullname: Optional[str]
+    constname: Optional[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ok": True,
+            "item": {
+                "isn": self.isn,
+                "parentisn": self.parentisn,
+                "shortname": self.shortname,
+                "fullname": self.fullname,
+                "constname": self.constname,
             },
         }

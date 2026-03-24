@@ -27,3 +27,7 @@ class OracleConnectionError(McpOracleError):
 
 class OracleAccessError(McpOracleError):
     """Raised when Oracle rejects metadata access."""
+
+
+class DictItemNotFoundError(McpOracleError):
+    """Raised when no record with the given ISN exists in ais.dicti."""

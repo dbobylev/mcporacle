@@ -6,6 +6,7 @@ from typing import Any
 from mcporacle.config import Settings
 from mcporacle.errors import McpOracleError
 from mcporacle.oracle.client import OracleMetadataRepository
+from mcporacle.services.dict_item import DictItemService
 from mcporacle.services.table_info import TableInfoService
 
 
@@ -25,6 +26,7 @@ def build_server() -> Any:
 
     repository = OracleMetadataRepository(settings)
     service = TableInfoService(repository)
+    dict_service = DictItemService(repository)
     server = FastMCP("mcporacle")
 
     @server.tool()
@@ -54,6 +56,65 @@ def build_server() -> Any:
                 "error": {
                     "type": "InternalServerError",
                     "message": "Unexpected error while fetching table metadata.",
+                },
+            }
+
+    @server.tool()
+    def get_dict_item(isn: int) -> dict:
+        """Get a dictionary entry from ais.dicti by ISN (individual serial number).
+
+        Returns isn, parentisn, shortname, fullname, and constname for the record.
+        Use when the user wants to look up a specific dictionary item by its numeric ID.
+        """
+
+        try:
+            return dict_service.get_dict_item(isn)
+        except McpOracleError as exc:
+            LOGGER.warning("Tool request failed: %s", exc)
+            return {
+                "ok": False,
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                },
+            }
+        except Exception:  # pragma: no cover - defensive guardrail
+            LOGGER.exception("Unhandled server error")
+            return {
+                "ok": False,
+                "error": {
+                    "type": "InternalServerError",
+                    "message": "Unexpected error while fetching dictionary item.",
+                },
+            }
+
+    @server.tool()
+    def get_dict_item_by_constname(constname: str) -> dict:
+        """Get a dictionary entry from ais.dicti by constname (string constant identifier).
+
+        Use this tool when analyzing code that calls c.get('SOME_CONSTANT') or references
+        a dictionary item by its symbolic name rather than a numeric ISN.
+        The lookup is case-insensitive (constname is matched with UPPER()).
+        """
+
+        try:
+            return dict_service.get_dict_item_by_constname(constname)
+        except McpOracleError as exc:
+            LOGGER.warning("Tool request failed: %s", exc)
+            return {
+                "ok": False,
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                },
+            }
+        except Exception:  # pragma: no cover - defensive guardrail
+            LOGGER.exception("Unhandled server error")
+            return {
+                "ok": False,
+                "error": {
+                    "type": "InternalServerError",
+                    "message": "Unexpected error while fetching dictionary item.",
                 },
             }
 
