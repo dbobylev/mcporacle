@@ -29,7 +29,12 @@ def build_server() -> Any:
 
     @server.tool()
     def get_table_info(schema_name: str, table_name: str) -> dict:
-        """Return Oracle table metadata from a fixed DBA-view backed lookup."""
+        """Get Oracle database table metadata including columns, data types, nullability, and comments.
+
+        Use this tool when the user asks about table structure, column definitions,
+        data types, or schema information for a specific table in an Oracle database.
+        Requires schema name (owner) and table name.
+        """
 
         try:
             return service.get_table_info(schema_name, table_name)
@@ -68,3 +73,7 @@ def _configure_logging(level: str) -> None:
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+if __name__ == "__main__":
+    main()
