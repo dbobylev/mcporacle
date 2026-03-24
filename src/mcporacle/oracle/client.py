@@ -53,47 +53,48 @@ class OracleMetadataRepository:
     """Reads metadata from Oracle DBA views via a constrained PL/SQL block."""
 
     def __init__(self, settings: Settings) -> None:
-        self._settings = settings
-
-    def fetch_table_info(self, schema_name: str, table_name: str) -> TableInfo:
         oracledb = _import_oracledb()
-        connection = None
-
         try:
-            connection = oracledb.connect(
-                user=self._settings.oracle_user,
-                password=self._settings.oracle_password,
-                dsn=self._settings.oracle_dsn,
+            self._pool = oracledb.create_pool(
+                user=settings.oracle_user,
+                password=settings.oracle_password,
+                dsn=settings.oracle_dsn,
+                min=1,
+                max=1,
+                increment=1,
             )
         except oracledb.DatabaseError as exc:
             raise _map_database_error(exc) from exc
 
+    def fetch_table_info(self, schema_name: str, table_name: str) -> TableInfo:
+        oracledb = _import_oracledb()
         table_cursor = None
         column_cursor = None
         try:
-            with connection.cursor() as cursor:
-                table_cursor_var = cursor.var(oracledb.CURSOR)
-                column_cursor_var = cursor.var(oracledb.CURSOR)
-                cursor.execute(
-                    PLSQL_TABLE_INFO_BLOCK,
-                    owner=schema_name,
-                    table_name=table_name,
-                    table_cursor=table_cursor_var,
-                    column_cursor=column_cursor_var,
-                )
-                table_cursor = table_cursor_var.getvalue()
-                column_cursor = column_cursor_var.getvalue()
-
-                table_row = table_cursor.fetchone()
-                if not table_row:
-                    raise TableNotFoundError(
-                        "Table {schema}.{table} was not found.".format(
-                            schema=schema_name,
-                            table=table_name,
-                        )
+            with self._pool.acquire() as connection:
+                with connection.cursor() as cursor:
+                    table_cursor_var = cursor.var(oracledb.CURSOR)
+                    column_cursor_var = cursor.var(oracledb.CURSOR)
+                    cursor.execute(
+                        PLSQL_TABLE_INFO_BLOCK,
+                        owner=schema_name,
+                        table_name=table_name,
+                        table_cursor=table_cursor_var,
+                        column_cursor=column_cursor_var,
                     )
+                    table_cursor = table_cursor_var.getvalue()
+                    column_cursor = column_cursor_var.getvalue()
 
-                column_rows = column_cursor.fetchall()
+                    table_row = table_cursor.fetchone()
+                    if not table_row:
+                        raise TableNotFoundError(
+                            "Table {schema}.{table} was not found.".format(
+                                schema=schema_name,
+                                table=table_name,
+                            )
+                        )
+
+                    column_rows = column_cursor.fetchall()
 
             columns = [
                 TableColumnInfo(
@@ -121,7 +122,6 @@ class OracleMetadataRepository:
         finally:
             _close_quietly(table_cursor)
             _close_quietly(column_cursor)
-            _close_quietly(connection)
 
 
 def _import_oracledb() -> Any:
