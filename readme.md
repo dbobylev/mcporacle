@@ -6,9 +6,8 @@
 
 - Python-проект с установкой через `pip`
 - MCP server со `stdio` transport
-- Tool `get_table_info(schema_name, table_name)`
+- Три MCP tools (см. раздел ниже)
 - Подключение к Oracle через переменные окружения
-- Получение описания таблицы и колонок через анонимный PL/SQL-блок
 - Базовая валидация входных параметров и обработка ошибок
 - Минимальные unit-тесты на валидацию и формат ответа
 
@@ -43,7 +42,8 @@
 │       ├── oracle/
 │       │   └── client.py
 │       └── services/
-│           └── table_info.py
+│           ├── table_info.py
+│           └── dict_item.py
 └── tests/
 ```
 
@@ -161,57 +161,25 @@ Roo Code поддерживает два уровня конфигурации M
 
 ### Быстрая проверка
 
-После подключения MCP server в Roo Code должен появиться tool `get_table_info`. Дальше можно дать Roo, например, такой запрос:
+После подключения в Roo Code появятся три tool. Пример запроса:
 
 ```text
 Используй tool get_table_info для схемы HR и таблицы EMPLOYEES
 ```
 
-## Tool `get_table_info`
+## MCP Tools
 
-### Вход
+### `get_table_info(schema_name, table_name)`
 
-```json
-{
-  "schema_name": "HR",
-  "table_name": "EMPLOYEES"
-}
-```
+Возвращает метаданные таблицы Oracle: описание таблицы, список колонок с типами, признаком nullable и комментариями. Данные читаются из `DBA_TABLES`, `DBA_TAB_COMMENTS`, `DBA_TAB_COLUMNS`, `DBA_COL_COMMENTS` через анонимный PL/SQL-блок с REF CURSOR.
 
-### Выход
+### `get_dict_item(isn)`
 
-```json
-{
-  "ok": true,
-  "table": {
-    "owner": "HR",
-    "table_name": "EMPLOYEES",
-    "comment": "Employee master data",
-    "columns": [
-      {
-        "name": "EMPLOYEE_ID",
-        "data_type": "NUMBER",
-        "nullable": false,
-        "data_length": 22,
-        "data_precision": 10,
-        "data_scale": 0,
-        "column_id": 1,
-        "comment": "Primary key"
-      }
-    ]
-  }
-}
-```
+Возвращает запись из `ais.dicti` по числовому ISN (individual serial number). Поля ответа: `isn`, `parentisn`, `shortname`, `fullname`, `constname`.
 
-### Как реализован запрос
+### `get_dict_item_by_constname(constname)`
 
-Tool вызывает анонимный PL/SQL-блок, который:
-
-- открывает один REF CURSOR для информации о таблице
-- открывает второй REF CURSOR для списка колонок
-- читает данные из DBA views через bind-параметры
-
-Это позволяет сохранить функциональность строго ограниченной и не принимать SQL от клиента.
+Возвращает запись из `ais.dicti` по строковому имени константы. Поиск регистронезависимый (`UPPER`). Используется когда в коде встречается паттерн `c.get('SOME_CONSTANT')`.
 
 ## Требования к Oracle
 
@@ -232,15 +200,8 @@ Tool вызывает анонимный PL/SQL-блок, который:
 python -m unittest discover -s tests -v
 ```
 
-## Что пока не входит в MVP
+## Что пока не входит
 
-- дополнительные tools кроме `get_table_info`
-- пул соединений
 - кеширование метаданных
 - fallback на `ALL_*`/`USER_*` views
 - интеграционные тесты с живой Oracle DB
-
-## Допущения
-
-- Для первого MVP выбран самый простой и безопасный интерфейс: только один tool и только metadata lookup.
-- Если у пользователя нет прав на `DBA_*` views, сервер сейчас возвращает понятную ошибку, а не пытается автоматически переключаться на другие словари.
